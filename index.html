@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roommate Ledger</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        header {
+            background-color: #21a179; /* Splitwise green */
+            color: white;
+            padding: 20px 15px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+        .balance-item {
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .balance-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .balance-amount {
+            font-size: 1.3em;
+            font-weight: 700;
+        }
+        .owed {
+            color: #dc3545; /* Red */
+        }
+        .owes-you {
+            color: #28a745; /* Green */
+        }
+        .fab { /* Floating Action Button for Add Expense */
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #ff9900; /* Orange */
+            color: white;
+            text-decoration: none;
+            padding: 15px 20px;
+            border-radius: 50px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            font-weight: bold;
+            transition: background-color 0.3s;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Roommate Ledger</h1>
+        <p>Current Balances &mdash; Tap to Settle</p>
+    </header>
+
+    <div class="container">
+        <div id="balances-list">
+            <p>Loading balances...</p>
+        </div>
+        
+        <a href="https://forms.gle/B1xdRG2FJoZ6jQMb9" target="_blank" class="fab">
+            + Add Expense
+        </a>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://hglteqobxihvubezmbkl.supabase.co';    
+        const SUPABASE_ANON_KEY = 'sb_publishable_psLCnOBSJKm2LPOF2n-4pw_VKy1-3Kk'; 
+
+        // Initialize Supabase client
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const listElement = document.getElementById('balances-list');
+
+        async function fetchBalances() {
+            listElement.innerHTML = '<p>Loading balances from Supabase...</p>';
+            
+            // Fetch data from the live calculation view we created: balances_view
+            const { data: balances, error } = await client
+                .from('balances_view')
+                .select('name, net_balance')
+                .order('net_balance', { ascending: false });
+
+            if (error) {
+                listElement.innerHTML = `<p style="color:red;">Error fetching data: ${error.message}</p>`;
+                console.error(error);
+                return;
+            }
+
+            renderBalances(balances);
+        }
+
+        function renderBalances(balances) {
+            listElement.innerHTML = ''; // Clear loading text
+
+            // Filter out balances that are effectively zero (less than $0.01)
+            const outstandingBalances = balances.filter(item => Math.abs(item.net_balance) > 0.01);
+            
+            if (outstandingBalances.length === 0) {
+                listElement.innerHTML = '<p>🎉 All Settled Up! No outstanding balances.</p>';
+                return;
+            }
+
+            outstandingBalances.forEach(item => {
+                const amount = Math.abs(item.net_balance).toFixed(2);
+                const isOwed = item.net_balance > 0;
+                const statusClass = isOwed ? 'owes-you' : 'owed';
+                const statusText = isOwed ? 'is owed' : 'owes'; // Positive balance means they are owed money
+
+                const itemHTML = `
+                    <div class="balance-item">
+                        <div>
+                            <div class="balance-name">${item.name}</div>
+                            <small>Net: ${statusText} others</small>
+                        </div>
+                        <div class="balance-amount ${statusClass}">
+                            $${amount}
+                        </div>
+                    </div>
+                `;
+                listElement.innerHTML += itemHTML;
+            });
+        }
+
+        // Run the function to fetch data when the page loads
+        fetchBalances();
+    </script>
+</body>
+</html>
